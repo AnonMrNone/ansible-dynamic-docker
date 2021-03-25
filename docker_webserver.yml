@@ -1,0 +1,79 @@
+- name: configure docker-ce and setting up httpd on container
+  hosts: localhost
+  tasks:
+          - name: Configure yum for docker
+            yum_repository:
+                    name: dockerepo
+                    description: dockerrepo
+                    baseurl: https://download.docker.com/linux/centos/7/x86_64/stable/
+                    gpgcheck: no
+                    enabled: yes
+                    state: present
+          - name: Installing Docker package
+            package:
+                    name:
+                            - "docker-ce-18.09.1-3.el7.x86_64"
+                    state: present  
+          - name: Start Docker service
+            service:
+                    name: "docker"
+                    state: started
+                    enabled: yes
+          - name: Installing Python3
+            package:
+                    name:
+                            - "python36"
+          - name: Installing docker sdk 
+            command: pip3 install docker
+
+          - name: Create Docker Container
+            docker_container:
+                    name: "webserveransible"
+                    image: "shubhambhalala/centos-ssh:latest"
+                    state: started
+                    interactive: yes
+                    detach: yes
+                    tty: yes
+                    exposed_ports:
+                            - "80"
+                    ports:
+                            - "3434:80"
+            register: webos
+          - debug:
+                  var: webos.container.NetworkSettings.IPAddress
+
+          - name: updating inventory
+            blockinfile:
+                    path: "/root/practice/inventory.txt"
+                    block: |
+                            [dcont]
+                            {{webos['container']['NetworkSettings']['IPAddress']}} ansible_user=root ansible_ssh_pass=redhat 
+                    marker: ""
+          - name: Testing container communication
+            command: id
+            register: out
+          - debug:
+                  var: out 
+
+- hosts: dcont
+  tasks:
+          - include_vars: docker_vars.yml
+          - name: Installing httpd php python
+            package:
+                    name: "{{item}}"
+                    state: present
+            loop: "{{pkgs}}"
+          - name: Webpage
+            copy:
+                    src: /root/practice/index.html
+                    dest: /var/www/html
+            notify:
+                    - restart apache
+  
+  handlers:
+          - name: restart apache
+            command: /usr/sbin/httpd          
+
+            
+          
+         
